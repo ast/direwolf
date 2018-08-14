@@ -13,7 +13,6 @@ project('direwolf', 'c',
 cc = meson.get_compiler('c')
 
 add_project_arguments(['-D_XOPEN_SOURCE=600', '-D_DEFAULT_SOURCE=1'], language: 'c')
-
 ## Raspberry Pi optimzations
 # add_project_arguments(['-O3', '-ffast-math', '-mfpu=neon-vfpv4', '-funsafe-math-optimizations'], language: 'c')
 
