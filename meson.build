@@ -21,7 +21,7 @@ host_system = host_machine.system()
 
 if host_system == 'linux'
 	# Use ALSA
-	audio_dep = dependency('asound', required: true)
+	audio_dep = dependency('alsa', required: true)
 	add_project_arguments('-DUSE_ALSA', language: 'c')
 	audio_c = 'audio.c'
 elif host_system == 'darwin'
@@ -49,7 +49,7 @@ thread_dep = dependency('threads', required: true)
 hamlib_dep = dependency('hamlib', required: false)
 libgps_dep = dependency('libgps', required: false)
 
-# TUDO: add libudev support
+# TODO: add libudev support
 
 if hamlib_dep.found()
 	add_project_arguments('-DUSE_HAMLIB', language: 'c')
@@ -59,14 +59,13 @@ if libgps_dep.found()
 	add_project_arguments('-DENABLE_GPSD', language: 'c')
 endif
 
+## Include directories
+inc = include_directories(['.', 'geotranz'])
+
 ## Geotranz
 subdir('geotranz')
-
 ## Misc
-# subdir('misc')
-
-## Include directories
-inc = include_directories(['geotranz'])
+subdir('misc')
 
 textcolor_lib = static_library('textcolor',
     'textcolor.c',
@@ -75,7 +74,8 @@ textcolor_lib = static_library('textcolor',
 # Generates fsk_fast_filter.h
 gen_fff = executable('gen_fff',
 	['demod_afsk.c', 'dsp.c'],
-	link_with: textcolor_lib,
+	link_with: [textcolor_lib, misc_lib],
+    dependencies: [m_dep],
 	c_args: ['-DGEN_FFF'],
 	install: false
 )
@@ -94,43 +94,46 @@ decode_aprs_sources = ['decode_aprs.c', 'kiss_frame.c', 'ax25_pad.c', 'dwgpsnmea
 	'telemetry.c', 'tt_text.c']
 executable('decode_aprs',
 	decode_aprs_sources,
-	link_with: textcolor_lib,
-	dependencies: [libgps_dep],
+	link_with: [textcolor_lib, misc_lib],
+	dependencies: [libgps_dep, m_dep, thread_dep],
 	install: false,
 	c_args: ['-DDECAMAIN'])
 
 ## text2tt
 executable('text2tt', 'tt_text.c',
+	link_with: [misc_lib],
 	install: false,
 	c_args: ['-DENC_MAIN'])
 
 ## tt2text
 executable('tt2text', 'tt_text.c',
+	link_with: [misc_lib],
 	install: false,
 	c_args: ['-DDEC_MAIN'])
 
 ## ll2utm
 executable('ll2utm', 'll2utm.c',
-	link_with: [geotranz_lib, textcolor_lib],
+	link_with: [geotranz_lib, textcolor_lib, misc_lib],
 	include_directories: [inc],
 	install: false)
 
 ## utm2ll
 executable('utm2ll', 'utm2ll.c',
-	link_with: [geotranz_lib, textcolor_lib],
+	link_with: [geotranz_lib, textcolor_lib, misc_lib],
 	include_directories: [inc],
 	install: false)
 
 ## log2gpx
 executable('log2gpx', 'log2gpx.c',
-	link_with: textcolor_lib,
+	link_with: [textcolor_lib, misc_lib],
 	install: false)
 
 ## gen_packets
 gen_packets_sources = ['gen_packets.c', 'ax25_pad.c', 'hdlc_send.c', 'fcs_calc.c',
 	'gen_tone.c', 'morse.c', 'dtmf.c', 'dsp.c']
 executable('gen_packets', gen_packets_sources,
-	link_with: textcolor_lib,
+	link_with: [textcolor_lib, misc_lib],
+	dependencies: [m_dep],
 	install: false)
 
 # Unit test for AFSK demodulator
@@ -139,31 +142,33 @@ atest_sources = ['atest.c', 'demod.c', 'demod_afsk.c', 'demod_psk.c', 'demod_960
 	'decode_aprs.c', 'dwgpsnmea.c', 'dwgps.c', 'dwgpsd.c', 'serial_port.c', 'telemetry.c',
 	'dtime_now.c', 'latlong.c', 'symbols.c', 'tt_text.c']
 executable('atest', atest_sources,
-	link_with: textcolor_lib,
-	dependencies: [libgps_dep],
+	link_with: [textcolor_lib, misc_lib],
+	dependencies: [libgps_dep, m_dep, thread_dep, m_dep],
 	install: false)
 
 # Multiple AGWPE network or serial port clients to test TNCs side by side
 executable('aclients', ['aclients.c', 'ax25_pad.c', 'fcs_calc.c'],
-	link_with: textcolor_lib,
+	link_with: [textcolor_lib, misc_lib],
+	dependencies: [thread_dep],
 	install: false)
 
 # Talk to a KISS TNC
 executable('kissutil', ['kissutil.c', 'kiss_frame.c', 'ax25_pad.c', 'fcs_calc.c', 'serial_port.c',
 	'dtime_now.c', 'sock.c'],
-	link_with: textcolor_lib,
+	link_with: [textcolor_lib, misc_lib],
+	dependencies: [thread_dep],
 	c_args: ['-DKISSUTIL'],
 	install: false)
 
 # List USB audio adapters than can use GPIO for PTT.
 executable('cm108', 'cm108.c',
-	link_with: textcolor_lib,
+	link_with: [textcolor_lib, misc_lib],
 	c_args: ['-DCM108_MAIN'],
 	install: false)
 
 # Touch Tone to Speech sample application.
 executable('ttcalc', ['ttcalc.c', 'ax25_pad.c', 'fcs_calc.c'],
-	link_with: textcolor_lib,
+	link_with: [textcolor_lib, misc_lib],
 	install: false)
 
 ## Tests
@@ -171,24 +176,24 @@ executable('ttcalc', ['ttcalc.c', 'ax25_pad.c', 'fcs_calc.c'],
 dtest = executable('dtest', ['digipeater.c', 'dedupe.c', 'pfilter.c', 'ax25_pad.c',
 	'fcs_calc.c', 'tq.c', 'decode_aprs.c', 'dwgpsnmea.c', 'dwgps.c', 'dwgpsd.c',
 	'serial_port.c', 'latlong.c', 'telemetry.c', 'symbols.c', 'tt_text.c'],
-	link_with: textcolor_lib,
-	dependencies: [libgps_dep],
+	link_with: [textcolor_lib, misc_lib],
+	dependencies: [libgps_dep, thread_dep, m_dep],
 	c_args: ['-DDIGITEST'],
 	install: false)
 test('dtest', dtest)
 
 # Unit test for APRStt tone sequence parsing.
 ttest = executable('ttest', ['aprs_tt.c', 'tt_text.c', 'latlong.c'],
-	link_with: [geotranz_lib, textcolor_lib],
 	include_directories: [inc],
+	link_with: [geotranz_lib, textcolor_lib, misc_lib],
+	dependencies: [m_dep],
 	c_args: ['-DTT_MAIN'],
 	install: false)
 test('ttest', ttest)
 
 # Unit test for APRStt tone sequence / text conversions.
 tttexttest = executable('tttexttest', 'tt_text.c',
-	link_with: textcolor_lib,
-	# include_directories: [inc],
+	link_with: [textcolor_lib, misc_lib],
 	c_args: ['-DTTT_TEST'],
 	install: false)
 test('tttexttest', tttexttest)
@@ -196,29 +201,31 @@ test('tttexttest', tttexttest)
 # Unit test for Packet Filtering.
 pftest = executable('pftest', ['pfilter.c', 'ax25_pad.c', 'fcs_calc.c', 'decode_aprs.c', 'dwgpsnmea.c', 'dwgps.c',
 	'dwgpsd.c', 'serial_port.c', 'latlong.c', 'symbols.c', 'telemetry.c', 'tt_text.c'],
-	link_with: textcolor_lib,
-	dependencies: libgps_dep,
+	link_with: [textcolor_lib, misc_lib],
+	dependencies: [libgps_dep, thread_dep, m_dep],
 	c_args: ['-DPFTEST'],
 	install: false)
 test('pftest', pftest)
 
 # Unit test for telemetry decoding.
 tlmtest = executable('tlmtest', ['telemetry.c', 'ax25_pad.c', 'fcs_calc.c'],
-	link_with: textcolor_lib,
+	link_with: [textcolor_lib, misc_lib],
 	c_args: ['-DTEST'],
 	install: false)
 test('tlmtest', tlmtest)
 
 # Unit test for location coordinate conversion.
 lltest = executable('lltest', 'latlong.c',
-	link_with: textcolor_lib,
+	link_with: [textcolor_lib, misc_lib],
+	dependencies: [m_dep],
 	c_args: ['-DLLTEST'],
 	install: false)
 test('lltest', lltest)
 
 # Unit test for encoding position & object report.
 enctest = executable('enctest', ['encode_aprs.c', 'latlong.c'],
-	link_with: textcolor_lib,
+	link_with: [textcolor_lib, misc_lib],
+	dependencies: [m_dep],
 	c_args: ['-DEN_MAIN'],
 	install: false)
 test('enctest', enctest)
@@ -231,21 +238,22 @@ test('kisstest', kisstest)
 
 # Unit test for constructing frames besides UI.
 pad2test = executable('pad2test', ['ax25_pad2.c', 'ax25_pad.c', 'fcs_calc.c'],
-	link_with: textcolor_lib,
+	link_with: [textcolor_lib, misc_lib],
 	c_args: ['-DPAD2TEST'],
 	install: false)
 test('pad2test', pad2test)
 
 # Unit Test for XID frame encode/decode.
 xidtest = executable('xidtest', 'xid.c',
-	link_with: textcolor_lib,
+	link_with: [textcolor_lib, misc_lib],
 	c_args: ['-DXIDTEST'],
 	install: false)
 test('xidtest', xidtest)
 
 # Unit Test for DTMF encode/decode.
 dtmftest = executable('dtmftest', 'dtmf.c',
-	link_with: textcolor_lib,
+	link_with: [textcolor_lib, misc_lib],
+	dependencies: [m_dep],
 	c_args: ['-DDTMF_TEST'],
 	install: false)
 test('dtmftest', dtmftest)
@@ -263,7 +271,7 @@ direwolf_sources = ['direwolf.c', 'config.c', 'recv.c', 'demod.c', 'dsp.c', 'dem
 
 executable('direwolf',
 	direwolf_sources,
-	link_with: [geotranz_lib, textcolor_lib],
+	link_with: [geotranz_lib, textcolor_lib, misc_lib],
 	dependencies: [audio_dep, hamlib_dep, libgps_dep, thread_dep, m_dep],
 	include_directories: [inc],
 	install: true)
